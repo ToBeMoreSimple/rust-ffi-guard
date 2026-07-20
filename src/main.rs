@@ -96,6 +96,7 @@ const CHECKS: &[CheckInfo] = &[
     CheckInfo { id: "unsafe-sprawl", severity: "warning", description: "unsafe block >10 lines — split into smaller blocks" },
     CheckInfo { id: "unsafe-no-safety-doc", severity: "warning", description: "unsafe block missing // SAFETY: comment" },
     CheckInfo { id: "ffi-ownership-ambiguous", severity: "warning", description: "extern fn accepts AND returns raw pointers — who owns what?" },
+    CheckInfo { id: "ffi-from-raw-parts", severity: "error", description: "slice::from_raw_parts / CStr::from_ptr on FFI data — UB risk" },
 ];
 
 fn print_report(report: &ffi_guard::Report) {

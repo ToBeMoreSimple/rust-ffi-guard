@@ -205,7 +205,9 @@ fn handle_tool_call(id: Option<Value>, params: Option<Value>, scanner: &Mutex<Sc
                     {"id": "unsafe-no-safety-doc", "severity": "warning",
                      "desc": "unsafe block missing // SAFETY: comment"},
                     {"id": "ffi-ownership-ambiguous", "severity": "warning",
-                     "desc": "extern fn both takes and returns raw pointers — ownership unclear"}
+                     "desc": "extern fn both takes and returns raw pointers — ownership unclear"},
+                    {"id": "ffi-from-raw-parts", "severity": "error",
+                     "desc": "slice::from_raw_parts / CStr::from_ptr on FFI data — C controls pointer+len = UB risk"}
                 ]
             });
             json!({

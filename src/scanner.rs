@@ -1,6 +1,7 @@
 use crate::checks::{
-    check_extern_fn_null_return, check_ffi_ownership, check_repr_c_layout,
-    check_repr_c_missing, check_unsafe_sprawl, check_unsafe_without_safety_doc,
+    check_extern_fn_null_return, check_ffi_from_raw_parts, check_ffi_ownership,
+    check_repr_c_layout, check_repr_c_missing, check_unsafe_sprawl,
+    check_unsafe_without_safety_doc,
 };
 use crate::report::{Issue, Report};
 use anyhow::Result;
@@ -45,6 +46,7 @@ pub struct UnsafeBlock {
     pub line: usize,
     pub line_count: usize,
     pub has_safety_comment: bool,
+    pub block_text: String,
 }
 
 #[derive(Debug, Clone)]
@@ -283,6 +285,7 @@ impl Scanner {
             line,
             line_count,
             has_safety_comment,
+            block_text: block_text.to_string(),
         });
     }
 
@@ -376,10 +379,14 @@ impl Scanner {
             issues.extend(check_repr_c_missing(s, &info.path));
         }
 
-        // Check 3: large unsafe blocks
+        // Check 3: large unsafe blocks + from_raw_parts audit
+        let has_ffi_ptrs = info.extern_fns.iter().any(|ef| {
+            ef.params.iter().any(|p| p.is_mut_ptr || p.is_const_ptr)
+        });
         for ub in &info.unsafe_blocks {
             issues.extend(check_unsafe_sprawl(ub, &info.path));
             issues.extend(check_unsafe_without_safety_doc(ub, &info.path));
+            issues.extend(check_ffi_from_raw_parts(ub, &ub.block_text, &info.path, has_ffi_ptrs));
         }
 
         // Check 4: FFI ownership patterns
