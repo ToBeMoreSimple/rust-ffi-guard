@@ -1,7 +1,7 @@
 use crate::checks::{
     check_callback_body_panics, check_callback_types, check_extern_fn_null_return,
-    check_ffi_from_raw_parts, check_ffi_ownership, check_repr_c_layout, check_repr_c_missing,
-    check_unsafe_sprawl, check_unsafe_without_safety_doc,
+    check_ffi_from_raw_parts, check_ffi_ownership, check_ffi_ptr_deref, check_repr_c_layout,
+    check_repr_c_missing, check_unsafe_sprawl, check_unsafe_without_safety_doc,
 };
 use crate::report::{Issue, Report};
 use anyhow::Result;
@@ -176,22 +176,38 @@ impl Scanner {
     }
 
     fn extract_extern_fn(&self, node: tree_sitter::Node, source: &[u8], info: &mut FileInfo) {
-        // Check if this function is inside an extern block
-        let mut parent = node.parent();
-        let is_extern = loop {
-            match parent {
-                Some(p) if matches!(p.kind(), "foreign_mod_item" | "extern_block" | "extern_modifier") => {
-                    break true;
-                }
-                Some(p) if p.kind() == "source_file" || p.kind() == "block" => break false,
-                Some(p) => parent = p.parent(),
-                None => break false,
+    // Check if this function has extern "C" ABI — either inside extern {} block
+    // OR a standalone `extern "C" fn name(...)` declaration
+    let mut parent = node.parent();
+    let is_extern = loop {
+        match parent {
+            Some(p) if matches!(p.kind(), "foreign_mod_item" | "extern_block" | "extern_modifier") => {
+                break true;
             }
-        };
-
-        if !is_extern {
-            return;
+            Some(p) if p.kind() == "source_file" || p.kind() == "block" => break false,
+            Some(p) => parent = p.parent(),
+            None => break false,
         }
+    };
+
+    // Also check if this is a standalone extern fn (has extern_modifier as sibling/child)
+    let is_standalone_extern = if !is_extern {
+        let mut cursor = node.walk();
+        let mut has_ext_mod = false;
+        for child in node.named_children(&mut cursor) {
+            if child.kind() == "extern_modifier" {
+                has_ext_mod = true;
+                break;
+            }
+        }
+        has_ext_mod
+    } else {
+        false
+    };
+
+    if !is_extern && !is_standalone_extern {
+        return;
+    }
 
         let mut ef = ExternFn {
             name: String::new(),
@@ -225,6 +241,24 @@ impl Scanner {
     }
 
     fn extract_abi(&self, node: tree_sitter::Node, source: &[u8]) -> String {
+        // Check node itself for extern_modifier children (standalone extern fn)
+        {
+            let mut cursor = node.walk();
+            for child in node.named_children(&mut cursor) {
+                if child.kind() == "extern_modifier" {
+                    let text = child.utf8_text(source).unwrap_or("\"C\"");
+                    if let Some(start) = text.find('"') {
+                        let rest = &text[start + 1..];
+                        if let Some(end) = rest.find('"') {
+                            return rest[..end].to_string();
+                        }
+                    }
+                    return "C".to_string();
+                }
+            }
+        }
+
+        // Walk up to find containing foreign_mod_item / extern_block
         let mut parent = node.parent();
         while let Some(p) = parent {
             match p.kind() {
@@ -393,6 +427,7 @@ impl Scanner {
             issues.extend(check_unsafe_sprawl(ub, &info.path));
             issues.extend(check_unsafe_without_safety_doc(ub, &info.path));
             issues.extend(check_ffi_from_raw_parts(ub, &ub.block_text, &info.path, has_ffi_ptrs));
+            issues.extend(check_ffi_ptr_deref(ub, &ub.block_text, &info.path, has_ffi_ptrs));
         }
 
         // Check 4: FFI ownership patterns
