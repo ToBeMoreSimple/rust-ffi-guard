@@ -178,6 +178,8 @@ const CHECKS: &[CheckInfo] = &[
     CheckInfo { id: "ffi-ownership-ambiguous", severity: "warning", description: "extern fn accepts AND returns raw pointers — who owns what?" },
     CheckInfo { id: "ffi-from-raw-parts", severity: "error", description: "slice::from_raw_parts / CStr::from_ptr on FFI data — UB risk" },
     CheckInfo { id: "ffi-callback-panic", severity: "warning", description: "extern C fn callbacks that may panic across FFI boundary" },
+    CheckInfo { id: "ffi-ptr-deref-no-nullcheck", severity: "error", description: "FFI raw pointer deref without null check" },
+    CheckInfo { id: "repr-c-should-be-transparent", severity: "warning", description: "#[repr(C)] single-field struct — use #[repr(transparent)]" },
 ];
 
 fn print_report(report: &ffi_guard::Report) {

@@ -5,6 +5,7 @@ pub mod from_raw_parts;
 pub mod ptr_deref;
 pub mod repr_c;
 pub mod repr_c_layout;
+pub mod repr_transparent;
 pub mod unsafe_block;
 
 pub use callback_panic::*;
@@ -14,4 +15,5 @@ pub use from_raw_parts::*;
 pub use ptr_deref::*;
 pub use repr_c::*;
 pub use repr_c_layout::*;
+pub use repr_transparent::*;
 pub use unsafe_block::*;

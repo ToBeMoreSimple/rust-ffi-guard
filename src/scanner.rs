@@ -1,7 +1,8 @@
 use crate::checks::{
     check_callback_body_panics, check_callback_types, check_extern_fn_null_return,
     check_ffi_from_raw_parts, check_ffi_ownership, check_ffi_ptr_deref, check_repr_c_layout,
-    check_repr_c_missing, check_unsafe_sprawl, check_unsafe_without_safety_doc,
+    check_repr_c_missing, check_repr_transparent, check_unsafe_sprawl,
+    check_unsafe_without_safety_doc,
 };
 use crate::report::{Issue, Report};
 use anyhow::Result;
@@ -417,6 +418,7 @@ impl Scanner {
         // Check 2: #[repr(C)] structs with raw pointers
         for s in &info.repr_c_structs {
             issues.extend(check_repr_c_missing(s, &info.path));
+            issues.extend(check_repr_transparent(s, &info.path));
         }
 
         // Check 3: large unsafe blocks + from_raw_parts audit
