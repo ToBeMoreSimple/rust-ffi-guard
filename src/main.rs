@@ -180,6 +180,7 @@ const CHECKS: &[CheckInfo] = &[
     CheckInfo { id: "ffi-callback-panic", severity: "warning", description: "extern C fn callbacks that may panic across FFI boundary" },
     CheckInfo { id: "ffi-ptr-deref-no-nullcheck", severity: "error", description: "FFI raw pointer deref without null check" },
     CheckInfo { id: "repr-c-should-be-transparent", severity: "warning", description: "#[repr(C)] single-field struct — use #[repr(transparent)]" },
+    CheckInfo { id: "ffi-cstring-unwrap", severity: "warning", description: "CString::new().unwrap() in FFI — null byte panics = UB" },
 ];
 
 fn print_report(report: &ffi_guard::Report) {

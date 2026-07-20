@@ -1,8 +1,8 @@
 use crate::checks::{
-    check_callback_body_panics, check_callback_types, check_extern_fn_null_return,
-    check_ffi_from_raw_parts, check_ffi_ownership, check_ffi_ptr_deref, check_repr_c_layout,
-    check_repr_c_missing, check_repr_transparent, check_unsafe_sprawl,
-    check_unsafe_without_safety_doc,
+    check_callback_body_panics, check_callback_types, check_cstring_unwrap,
+    check_extern_fn_null_return, check_ffi_from_raw_parts, check_ffi_ownership,
+    check_ffi_ptr_deref, check_repr_c_layout, check_repr_c_missing, check_repr_transparent,
+    check_unsafe_sprawl, check_unsafe_without_safety_doc,
 };
 use crate::report::{Issue, Report};
 use anyhow::Result;
@@ -430,6 +430,7 @@ impl Scanner {
             issues.extend(check_unsafe_without_safety_doc(ub, &info.path));
             issues.extend(check_ffi_from_raw_parts(ub, &ub.block_text, &info.path, has_ffi_ptrs));
             issues.extend(check_ffi_ptr_deref(ub, &ub.block_text, &info.path, has_ffi_ptrs));
+            issues.extend(check_cstring_unwrap(ub, &ub.block_text, &info.path));
         }
 
         // Check 4: FFI ownership patterns

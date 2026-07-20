@@ -1,4 +1,5 @@
 pub mod callback_panic;
+pub mod cstring_unwrap;
 pub mod extern_fn;
 pub mod ffi_types;
 pub mod from_raw_parts;
@@ -9,6 +10,7 @@ pub mod repr_transparent;
 pub mod unsafe_block;
 
 pub use callback_panic::*;
+pub use cstring_unwrap::*;
 pub use extern_fn::*;
 pub use ffi_types::*;
 pub use from_raw_parts::*;
