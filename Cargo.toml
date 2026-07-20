@@ -1,0 +1,30 @@
+[package]
+name = "ffi-guard"
+version = "0.1.0"
+edition = "2021"
+description = "AI-native Rust FFI safety auditor — catches what clippy misses across C/C++ boundaries"
+license = "MIT"
+repository = "https://github.com/yinyaode/rust-ffi-guard"
+keywords = ["rust", "ffi", "c", "safety", "unsafe", "mcp-server", "static-analysis"]
+categories = ["development-tools", "command-line-utilities"]
+
+[[bin]]
+name = "ffi-guard"
+path = "src/main.rs"
+
+[dependencies]
+clap = { version = "4", features = ["derive"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+anyhow = "1"
+walkdir = "2"
+toml = "0.8"
+colored = "3"
+
+# Syntax parsing
+tree-sitter = "0.25"
+tree-sitter-rust = "0.23"
+
+[profile.release]
+opt-level = 2
+lto = true
