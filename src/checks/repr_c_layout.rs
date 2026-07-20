@@ -145,16 +145,63 @@ fn parse_c_field_list(node: tree_sitter::Node, source: &[u8]) -> Vec<CField> {
     for child in node.named_children(&mut cursor) {
         if child.kind() == "field_declaration" {
             let field_text = child.utf8_text(source).unwrap_or("");
-            let (name, ty) = split_c_field_decl(field_text);
+
+            // Extract actual field identifier from tree-sitter (handles `void *data`, `int x`, etc.)
+            let name = find_field_identifier(child, source)
+                .unwrap_or_else(|| {
+                    // Fallback to text-based parsing
+                    let (n, _) = split_c_field_decl(field_text);
+                    n
+                });
+
+            let ty = extract_c_type_text(child, source);
+
             fields.push(CField {
                 name,
-                ty: ty.clone(),
-                is_ptr: ty.contains('*'),
-                is_const: ty.contains("const"),
+                ty,
+                is_ptr: field_text.contains('*'),
+                is_const: field_text.contains("const"),
             });
         }
     }
     fields
+}
+
+/// Find the field_identifier node anywhere in the field_declaration subtree.
+fn find_field_identifier(node: tree_sitter::Node, source: &[u8]) -> Option<String> {
+    if node.kind() == "field_identifier" {
+        return node.utf8_text(source).ok().map(|s| s.to_string());
+    }
+    let mut cursor = node.walk();
+    for child in node.named_children(&mut cursor) {
+        if let Some(name) = find_field_identifier(child, source) {
+            return Some(name);
+        }
+    }
+    None
+}
+
+/// Extract just the type portion of a field declaration (without the name).
+fn extract_c_type_text(node: tree_sitter::Node, source: &[u8]) -> String {
+    let full = node.utf8_text(source).unwrap_or("");
+    let name = find_field_identifier(node, source).unwrap_or_default();
+    // Remove the field name from the type string, handling `*name` patterns
+    let ty = full
+        .trim_end_matches(';')
+        .replace(&name, "")
+        .trim()
+        .to_string();
+    if ty.is_empty() {
+        // Fallback: take everything before the last word as type
+        let words: Vec<&str> = full.split_whitespace().collect();
+        if words.len() > 1 {
+            words[..words.len() - 1].join(" ")
+        } else {
+            full.to_string()
+        }
+    } else {
+        ty
+    }
 }
 
 /// Split a C field declaration like "int *data" into ("data", "int *").
@@ -246,6 +293,8 @@ pub fn check_repr_c_layout(
         match c_map.get(rs.name.as_str()) {
             Some(cs) => {
                 // Found matching C struct — compare fields
+
+                // Check 1: field count
                 if rs.field_count != cs.fields.len() {
                     issues.push(Issue {
                         severity: Severity::Error,
@@ -262,6 +311,68 @@ pub fn check_repr_c_layout(
                             "Field count mismatch between Rust and C — check for missing or extra fields.".to_string(),
                         ),
                     });
+                }
+
+                // Check 2: field name ordering
+                // Same names, wrong order → memory layout broken at runtime
+                let c_names: Vec<&str> = cs.fields.iter().map(|f| f.name.as_str()).collect();
+                let rust_names: Vec<&str> = rs.field_names.iter().map(|s| s.as_str()).collect();
+
+                if !c_names.is_empty() && !rust_names.is_empty() {
+                    let c_set: std::collections::HashSet<&str> = c_names.iter().copied().collect();
+                    let r_set: std::collections::HashSet<&str> = rust_names.iter().copied().collect();
+
+                    if c_set == r_set && c_names != rust_names {
+                        // Field names match but ORDER doesn't — UB at runtime!
+                        issues.push(Issue {
+                            severity: Severity::Error,
+                            check: "repr-c-field-order",
+                            file: rust_file.to_string(),
+                            line: rs.line,
+                            column: 1,
+                            message: format!(
+                                "#[repr(C)] struct `{}` has the same fields as C header but in \
+                                 DIFFERENT ORDER — this causes silent memory corruption!\n  \
+                                 C order:   {}\n  \
+                                 Rust order: {}",
+                                rs.name,
+                                c_names.join(", "),
+                                rust_names.join(", ")
+                            ),
+                            suggestion: Some(
+                                "Reorder the Rust struct fields to match the C header exactly. \
+                                 #[repr(C)] follows C layout rules — field order = memory order."
+                                    .to_string(),
+                            ),
+                        });
+                    } else if !c_set.is_subset(&r_set) || !r_set.is_subset(&c_set) {
+                        // Partial mismatch in field names
+                        let c_only: Vec<_> = c_set.difference(&r_set).collect();
+                        let r_only: Vec<_> = r_set.difference(&c_set).collect();
+                        if !c_only.is_empty() || !r_only.is_empty() {
+                            let mut msg = format!(
+                                "#[repr(C)] struct `{}` field names don't match C header:",
+                                rs.name
+                            );
+                            if !c_only.is_empty() {
+                                msg.push_str(&format!(" C-only: [{}]", c_only.iter().map(|s| format!("`{s}`")).collect::<Vec<_>>().join(", ")));
+                            }
+                            if !r_only.is_empty() {
+                                msg.push_str(&format!(" Rust-only: [{}]", r_only.iter().map(|s| format!("`{s}`")).collect::<Vec<_>>().join(", ")));
+                            }
+                            issues.push(Issue {
+                                severity: Severity::Warning,
+                                check: "repr-c-field-names",
+                                file: rust_file.to_string(),
+                                line: rs.line,
+                                column: 1,
+                                message: msg,
+                                suggestion: Some(
+                                    "Field names must match exactly between C and #[repr(C)] Rust structs.".to_string(),
+                                ),
+                            });
+                        }
+                    }
                 }
 
                 // Check each C field type for known FFI compatibility

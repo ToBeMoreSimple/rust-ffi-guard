@@ -88,6 +88,8 @@ const CHECKS: &[CheckInfo] = &[
     CheckInfo { id: "extern-fn-not-unsafe", severity: "error", description: "extern fn not marked unsafe" },
     CheckInfo { id: "repr-c-no-drop", severity: "warning", description: "#[repr(C)] struct with raw pointers, no Drop impl" },
     CheckInfo { id: "repr-c-field-count", severity: "error", description: "#[repr(C)] struct field count mismatch with C header" },
+    CheckInfo { id: "repr-c-field-order", severity: "error", description: "#[repr(C)] fields in wrong order — silent memory corruption!" },
+    CheckInfo { id: "repr-c-field-names", severity: "warning", description: "#[repr(C)] field names don't match C header" },
     CheckInfo { id: "repr-c-unknown-ctype", severity: "warning", description: "C struct field has unrecognized type — verify FFI mapping" },
     CheckInfo { id: "repr-c-no-c-match", severity: "warning", description: "#[repr(C)] struct has no matching C header definition" },
     CheckInfo { id: "repr-c-unused-cstruct", severity: "info", description: "C header struct with no #[repr(C)] Rust counterpart" },

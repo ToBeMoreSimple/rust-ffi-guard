@@ -52,6 +52,7 @@ pub struct ReprCStruct {
     pub name: String,
     pub line: usize,
     pub field_count: usize,
+    pub field_names: Vec<String>,
     pub has_drop_impl: bool,
 }
 
@@ -309,6 +310,7 @@ impl Scanner {
 
         let mut name = String::new();
         let mut field_count = 0;
+        let mut field_names = Vec::new();
         let mut cursor = node.walk();
         for child in node.named_children(&mut cursor) {
             match child.kind() {
@@ -316,12 +318,24 @@ impl Scanner {
                     name = child.utf8_text(source).unwrap_or("").to_string();
                 }
                 "field_declaration_list" => {
-                    // Count actual field declarations (not commas etc.)
                     let mut f_cursor = child.walk();
-                    field_count = child
-                        .named_children(&mut f_cursor)
-                        .filter(|c| c.kind() == "field_declaration")
-                        .count();
+                    for fc in child.named_children(&mut f_cursor) {
+                        if fc.kind() == "field_declaration" {
+                            field_count += 1;
+                            // Extract field name: find field_identifier in declaration
+                            let mut fc_cursor = fc.walk();
+                            let mut fname = None;
+                            for fc_child in fc.named_children(&mut fc_cursor) {
+                                if fc_child.kind() == "field_identifier" {
+                                    fname = fc_child.utf8_text(source).ok().map(|s| s.to_string());
+                                    break;
+                                }
+                            }
+                            if let Some(name) = fname {
+                                field_names.push(name);
+                            }
+                        }
+                    }
                 }
                 _ => {}
             }
@@ -337,6 +351,7 @@ impl Scanner {
             name,
             line: node.start_position().row + 1,
             field_count,
+            field_names,
             has_drop_impl: has_drop_impl_if_needed,
         });
     }
