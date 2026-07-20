@@ -1,7 +1,7 @@
 use crate::checks::{
-    check_extern_fn_null_return, check_ffi_from_raw_parts, check_ffi_ownership,
-    check_repr_c_layout, check_repr_c_missing, check_unsafe_sprawl,
-    check_unsafe_without_safety_doc,
+    check_callback_body_panics, check_callback_types, check_extern_fn_null_return,
+    check_ffi_from_raw_parts, check_ffi_ownership, check_repr_c_layout, check_repr_c_missing,
+    check_unsafe_sprawl, check_unsafe_without_safety_doc,
 };
 use crate::report::{Issue, Report};
 use anyhow::Result;
@@ -99,7 +99,7 @@ impl Scanner {
         {
             let source = std::fs::read_to_string(entry.path())?;
             let info = self.parse_file(entry.path().to_string_lossy().as_ref(), &source);
-            let issues = self.check_file(&info);
+            let issues = self.check_file(&info, &source);
             project_findings.push((info, issues));
         }
 
@@ -366,12 +366,18 @@ impl Scanner {
     }
 
     /// Run all safety checks on a parsed file.
-    pub fn check_file(&self, info: &FileInfo) -> Vec<Issue> {
+    pub fn check_file(&self, info: &FileInfo, file_source: &str) -> Vec<Issue> {
         let mut issues = Vec::new();
+
+        // Check 0: callback types in the file
+        let has_extern_c_types = file_source.contains("extern \"C\" fn");
+        issues.extend(check_callback_types(&info.path, file_source, has_extern_c_types));
 
         // Check 1: extern functions returning raw pointers without docs
         for ef in &info.extern_fns {
             issues.extend(check_extern_fn_null_return(ef, &info.path));
+            // Check for panics inside extern fn bodies
+            issues.extend(check_callback_body_panics(ef, file_source, &info.path));
         }
 
         // Check 2: #[repr(C)] structs with raw pointers

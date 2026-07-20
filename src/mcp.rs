@@ -237,7 +237,7 @@ fn handle_tool_call(id: Option<Value>, params: Option<Value>, scanner: &Mutex<Sc
 
             let mut s = scanner.lock().unwrap();
             let info = s.parse_file(file_path, &source);
-            let issues: Vec<_> = s.check_file(&info);
+            let issues: Vec<_> = s.check_file(&info, &source);
 
             let result = json!({
                 "file": file_path,
