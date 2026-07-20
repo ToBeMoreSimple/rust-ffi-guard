@@ -30,6 +30,21 @@ enum Command {
 
     /// List all available safety checks
     Checks,
+
+    /// Hunt for FFI bugs across popular crates.io packages
+    Trophy {
+        /// Number of crates to scan (default: 20)
+        #[arg(long, default_value = "20")]
+        count: usize,
+
+        /// Filter crates by keyword (default: ffi)
+        #[arg(long, default_value = "ffi")]
+        keyword: String,
+
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
 }
 
 fn main() -> anyhow::Result<()> {
@@ -58,23 +73,88 @@ fn main() -> anyhow::Result<()> {
         }
 
         Command::Checks => {
-            println!("ffi-guard — safety checks:\n");
-            for check in CHECKS {
-                let icon = match check.severity {
-                    "error" => "✗".red(),
-                    "warning" => "⚠".yellow(),
-                    _ => "ℹ".dimmed(),
-                };
-                println!(
-                    "  {icon} {:<30} {}",
-                    check.id.bold(),
-                    check.description.dimmed()
-                );
+            print_checks();
+        }
+
+        Command::Trophy { count, keyword, json } => {
+            let cache = std::env::temp_dir().join("ffi-guard-trophy");
+            let _ = std::fs::create_dir_all(&cache);
+
+            let entries = ffi_guard::trophy::hunt(count, &keyword, &cache)?;
+
+            if json {
+                println!("{}", serde_json::to_string_pretty(&entries)?);
+            } else {
+                print_trophy_report(&entries);
             }
         }
     }
 
     Ok(())
+}
+
+fn print_checks() {
+    println!("ffi-guard — safety checks:\n");
+    for check in CHECKS {
+        let icon = match check.severity {
+            "error" => "✗".red(),
+            "warning" => "⚠".yellow(),
+            _ => "ℹ".dimmed(),
+        };
+        println!("  {icon} {:<30} {}", check.id.bold(), check.description.dimmed());
+    }
+}
+
+fn print_trophy_report(entries: &[ffi_guard::trophy::TrophyEntry]) {
+    println!();
+    println!("{}", "══ ffi-guard trophy case ══".bold().cyan());
+    println!("  Crates scanned with findings:\n");
+
+    for entry in entries {
+        let icon = if let Some(ref _err) = entry.error {
+            "💥".red()
+        } else if entry.errors > 0 {
+            "🐛".red()
+        } else {
+            "🔍".yellow()
+        };
+
+        println!(
+            "  {} {} v{} ({})",
+            icon,
+            entry.crate_name.bold(),
+            entry.version,
+            entry.description
+        );
+
+        if let Some(ref err) = entry.error {
+            println!("    ⚡ Error: {err}");
+        } else {
+            println!(
+                "    {} errors  {} warnings  {} info  — {} total",
+                entry.errors.to_string().red(),
+                entry.warnings.to_string().yellow(),
+                entry.infos.to_string().blue(),
+                entry.errors + entry.warnings + entry.infos
+            );
+            // Show first 2 issues as samples
+            for issue in entry.issues.iter().take(2) {
+                let sev = match issue.severity {
+                    Severity::Error => "✗".red(),
+                    Severity::Warning => "⚠".yellow(),
+                    Severity::Info => "ℹ".blue(),
+                };
+                println!("      {sev} {} [{}]", issue.message, issue.check);
+            }
+            if entry.issues.len() > 2 {
+                println!("      ... and {} more", entry.issues.len() - 2);
+            }
+        }
+        println!();
+    }
+
+    println!("{}", "── Legend ──".bold());
+    println!("  🐛 = has errors   🔍 = warnings only   💥 = scan failed\n");
 }
 
 struct CheckInfo {

@@ -11,6 +11,7 @@ pub mod checks;
 pub mod mcp;
 pub mod report;
 pub mod scanner;
+pub mod trophy;
 
 pub use scanner::Scanner;
 pub use report::{Issue, Report, Severity};
