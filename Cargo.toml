@@ -24,6 +24,7 @@ colored = "3"
 # Syntax parsing
 tree-sitter = "0.25"
 tree-sitter-rust = "0.23"
+tree-sitter-c = "0.24.2"
 
 [profile.release]
 opt-level = 2

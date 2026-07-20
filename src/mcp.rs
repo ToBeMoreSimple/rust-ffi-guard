@@ -87,6 +87,10 @@ fn handle_tools_list(id: Option<Value>) -> Value {
                             "project_path": {
                                 "type": "string",
                                 "description": "Absolute path to the Rust project root (must contain Cargo.toml)"
+                            },
+                            "headers_dir": {
+                                "type": "string",
+                                "description": "Optional path to C/C++ header directory for #[repr(C)] layout validation"
                             }
                         },
                         "required": ["project_path"]
@@ -141,6 +145,11 @@ fn handle_tool_call(id: Option<Value>, params: Option<Value>, scanner: &Mutex<Sc
                 .unwrap_or(".");
 
             let path = std::path::Path::new(project_path);
+            let headers_dir = arguments
+                .get("headers_dir")
+                .and_then(|v| v.as_str())
+                .map(|h| std::path::Path::new(h));
+
             if !path.join("Cargo.toml").exists() {
                 return json!({
                     "jsonrpc": "2.0",
@@ -152,7 +161,7 @@ fn handle_tool_call(id: Option<Value>, params: Option<Value>, scanner: &Mutex<Sc
             }
 
             let mut s = scanner.lock().unwrap();
-            match s.scan(path) {
+            match s.scan_with_headers(path, headers_dir) {
                 Ok(report) => {
                     let text = serde_json::to_string_pretty(&report)
                         .unwrap_or_else(|e| format!("Serialization error: {e}"));

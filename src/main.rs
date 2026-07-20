@@ -16,6 +16,10 @@ enum Command {
         #[arg(default_value = ".")]
         path: String,
 
+        /// Path to C/C++ header directory (for #[repr(C)] layout validation)
+        #[arg(long)]
+        headers: Option<String>,
+
         /// Output as JSON
         #[arg(long)]
         json: bool,
@@ -32,10 +36,11 @@ fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
-        Command::Scan { path, json } => {
+        Command::Scan { path, headers, json } => {
             let project_root = std::path::Path::new(&path).canonicalize()?;
+            let header_dir = headers.as_ref().map(|h| std::path::Path::new(h));
             let mut scanner = Scanner::new()?;
-            let report = scanner.scan(&project_root)?;
+            let report = scanner.scan_with_headers(&project_root, header_dir)?;
 
             if json {
                 println!("{}", serde_json::to_string_pretty(&report)?);
@@ -82,6 +87,10 @@ const CHECKS: &[CheckInfo] = &[
     CheckInfo { id: "extern-fn-null-return", severity: "warning", description: "extern fn returns raw pointer — callers may not null-check" },
     CheckInfo { id: "extern-fn-not-unsafe", severity: "error", description: "extern fn not marked unsafe" },
     CheckInfo { id: "repr-c-no-drop", severity: "warning", description: "#[repr(C)] struct with raw pointers, no Drop impl" },
+    CheckInfo { id: "repr-c-field-count", severity: "error", description: "#[repr(C)] struct field count mismatch with C header" },
+    CheckInfo { id: "repr-c-unknown-ctype", severity: "warning", description: "C struct field has unrecognized type — verify FFI mapping" },
+    CheckInfo { id: "repr-c-no-c-match", severity: "warning", description: "#[repr(C)] struct has no matching C header definition" },
+    CheckInfo { id: "repr-c-unused-cstruct", severity: "info", description: "C header struct with no #[repr(C)] Rust counterpart" },
     CheckInfo { id: "unsafe-sprawl", severity: "warning", description: "unsafe block >10 lines — split into smaller blocks" },
     CheckInfo { id: "unsafe-no-safety-doc", severity: "warning", description: "unsafe block missing // SAFETY: comment" },
     CheckInfo { id: "ffi-ownership-ambiguous", severity: "warning", description: "extern fn accepts AND returns raw pointers — who owns what?" },

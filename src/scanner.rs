@@ -1,10 +1,10 @@
 use crate::checks::{
-    check_extern_fn_null_return, check_ffi_ownership, check_repr_c_missing,
-    check_unsafe_sprawl, check_unsafe_without_safety_doc,
+    check_extern_fn_null_return, check_ffi_ownership, check_repr_c_layout,
+    check_repr_c_missing, check_unsafe_sprawl, check_unsafe_without_safety_doc,
 };
 use crate::report::{Issue, Report};
 use anyhow::Result;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use tree_sitter::Parser;
 
 /// Information extracted from a single Rust source file.
@@ -67,7 +67,8 @@ impl Scanner {
     }
 
     /// Scan a Rust project directory for FFI boundary issues.
-    pub fn scan(&mut self, project_root: &Path) -> Result<Report> {
+    /// If `header_dir` is provided, also validates #[repr(C)] structs against C headers.
+    pub fn scan_with_headers(&mut self, project_root: &Path, header_dir: Option<&Path>) -> Result<Report> {
         let ctf = cargo_toml_find(project_root)?;
         let project_name = {
             let default_name = project_root.to_string_lossy().to_string();
@@ -107,9 +108,26 @@ impl Scanner {
             for issue in issues {
                 report.add(issue);
             }
+
+            // Run C header layout check for this file's repr(C) structs
+            if !info.repr_c_structs.is_empty() {
+                let layout_issues = check_repr_c_layout(
+                    &info.repr_c_structs,
+                    header_dir,
+                    &info.path,
+                );
+                for issue in layout_issues {
+                    report.add(issue);
+                }
+            }
         }
 
         Ok(report)
+    }
+
+    /// Backward-compatible scan without header validation.
+    pub fn scan(&mut self, project_root: &Path) -> Result<Report> {
+        self.scan_with_headers(project_root, None)
     }
 
     /// Parse a single Rust source file with tree-sitter, extracting FFI-relevant info.
@@ -298,7 +316,12 @@ impl Scanner {
                     name = child.utf8_text(source).unwrap_or("").to_string();
                 }
                 "field_declaration_list" => {
-                    field_count = child.named_child_count();
+                    // Count actual field declarations (not commas etc.)
+                    let mut f_cursor = child.walk();
+                    field_count = child
+                        .named_children(&mut f_cursor)
+                        .filter(|c| c.kind() == "field_declaration")
+                        .count();
                 }
                 _ => {}
             }
