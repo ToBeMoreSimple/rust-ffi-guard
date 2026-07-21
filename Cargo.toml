@@ -5,7 +5,7 @@ edition = "2021"
 description = "AI-native Rust FFI safety auditor — catches what clippy misses across C/C++ boundaries"
 license = "MIT"
 repository = "https://github.com/yinyaode/rust-ffi-guard"
-keywords = ["rust", "ffi", "c", "safety", "unsafe", "mcp-server", "static-analysis"]
+keywords = ["rust", "ffi", "safety", "mcp", "static-analysis"]
 categories = ["development-tools", "command-line-utilities"]
 
 [[bin]]
